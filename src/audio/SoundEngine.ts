@@ -92,12 +92,6 @@ export class SoundEngine {
     }
   }
 
-  private mapValueToFilter(y: number): number {
-    const normalized = (y + 10) / 20; // 0 to 1
-    const clamped = Math.max(0, Math.min(1, normalized));
-    return 200 + clamped * 4800; // 200Hz to 5000Hz
-  }
-
   public getFFT() {
     return this.fft.getValue();
   }
