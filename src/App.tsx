@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Play, Square, Settings, Share2, Volume2, VolumeX, Activity, Music } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Play, Square, Settings, Share2, Volume2, VolumeX, Activity, Music, Check } from 'lucide-react';
 import * as Tone from 'tone';
 import EquationInput from './components/EquationInput';
 import GraphCanvas from './components/GraphCanvas';
@@ -11,15 +11,45 @@ import { useAudioEngine } from './hooks/useAudioEngine';
 import { analyzeEquation } from './utils/equationAnalyzer';
 
 function App() {
-  const [equation, setEquation] = useState('sin(x)');
+  const [equation, setEquation] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('eq') || 'sin(x)';
+  });
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(-1);
   const [audioMode, setAudioMode] = useState<'sequencer' | 'waveform'>('sequencer');
-  const [parameters, setParameters] = useState<Record<string, number>>({});
+  const [parameters, setParameters] = useState<Record<string, number>>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const initialParams: Record<string, number> = {};
+    params.forEach((val, key) => {
+      if (key !== 'eq') {
+        const num = parseFloat(val);
+        if (!isNaN(num)) initialParams[key] = num;
+      }
+    });
+    return initialParams;
+  });
 
-  useAudioEngine(equation, isPlaying, isMuted, audioMode, (step) => {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [bpm, setBpm] = useState(120);
+  const [volume, setVolume] = useState(80);
+  const [copied, setCopied] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  // Close settings when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(event.target as Node)) {
+        setIsSettingsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const { soundEngine } = useAudioEngine(equation, isPlaying, isMuted, audioMode, (step) => {
     setProgress(step);
   }, parameters);
 
@@ -56,6 +86,47 @@ function App() {
     setParameters(prev => ({ ...prev, [param]: value }));
   };
 
+  const handleShare = async () => {
+    const url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set('eq', equation);
+    Object.entries(parameters).forEach(([key, val]) => {
+      url.searchParams.set(key, val.toString());
+    });
+
+    const shareUrl = url.toString();
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Funky Functions',
+          text: 'Check out this mathematical beat I created!',
+          url: shareUrl,
+        });
+        return;
+      } catch (e) {
+        // Fallback to clipboard
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      console.error('Failed to copy', e);
+    }
+  };
+
+  const handleBpmChange = (newBpm: number) => {
+    setBpm(newBpm);
+    soundEngine.setBPM(newBpm);
+  };
+
+  const handleVolumeChange = (newVol: number) => {
+    setVolume(newVol);
+    soundEngine.setVolume(newVol);
+  };
+
   return (
     <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-foreground)] flex flex-col font-sans overflow-hidden">
       {/* Header */}
@@ -89,12 +160,57 @@ function App() {
           >
             {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
           </button>
-          <button className="p-2 rounded hover:bg-[var(--color-card)] transition-colors text-slate-500 hover:text-slate-800" title="Settings">
-            <Settings size={20} />
-          </button>
-          <button className="hidden md:flex items-center gap-2 px-4 py-2 rounded bg-white hover:bg-slate-50 transition-colors border border-[var(--color-border)] text-sm font-medium text-slate-700 shadow-sm">
-            <Share2 size={16} />
-            <span>Share</span>
+          <div className="relative" ref={settingsRef}>
+            <button 
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className={`p-2 rounded transition-colors ${isSettingsOpen ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:text-slate-800 hover:bg-[var(--color-card)]'}`}
+              title="Settings"
+            >
+              <Settings size={20} />
+            </button>
+            
+            {isSettingsOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-4 z-50">
+                <h3 className="font-semibold text-slate-800 mb-4 text-sm uppercase tracking-wider">Audio Settings</h3>
+                
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <label className="text-slate-600 font-medium">Tempo (BPM)</label>
+                      <span className="text-slate-800 font-mono bg-slate-50 px-2 py-0.5 rounded">{bpm}</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="60" max="200" 
+                      value={bpm}
+                      onChange={(e) => handleBpmChange(parseInt(e.target.value))}
+                      className="w-full accent-blue-600"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <label className="text-slate-600 font-medium">Master Volume</label>
+                      <span className="text-slate-800 font-mono bg-slate-50 px-2 py-0.5 rounded">{volume}%</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" max="100" 
+                      value={volume}
+                      onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                      className="w-full accent-blue-600"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <button 
+            onClick={handleShare}
+            className="hidden md:flex items-center gap-2 px-4 py-2 rounded bg-white hover:bg-slate-50 transition-colors border border-[var(--color-border)] text-sm font-medium text-slate-700 shadow-sm min-w-[90px] justify-center"
+          >
+            {copied ? <Check size={16} className="text-green-600" /> : <Share2 size={16} />}
+            <span className={copied ? "text-green-600" : ""}>{copied ? "Copied!" : "Share"}</span>
           </button>
         </div>
       </header>

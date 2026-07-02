@@ -92,6 +92,21 @@ export class SoundEngine {
     }
   }
 
+  public setBPM(bpm: number) {
+    Tone.Transport.bpm.value = bpm;
+  }
+
+  public setVolume(volume: number) {
+    // Convert 0-100 to decibels. Tone.Destination.volume goes from ~ -60 to 0
+    if (volume <= 0) {
+      Tone.Destination.volume.value = -Infinity;
+    } else {
+      // Map 1-100 to -40 to 0
+      const decibels = (volume / 100) * 40 - 40;
+      Tone.Destination.volume.value = decibels;
+    }
+  }
+
   public getFFT() {
     return this.fft.getValue();
   }
