@@ -31,14 +31,8 @@ const GraphCanvas: React.FC<GraphCanvasProps> = ({ equation, isPlaying, progress
     // Normalize coordinate system to use css pixels
     ctx.scale(dpr, dpr);
 
-    const width = rect.width;
-    const height = rect.height;
-
-    // Viewport settings
-    const minX = audioMode === 'waveform' ? 0 : -10;
-    const maxX = audioMode === 'waveform' ? 0.05 : 10;
     const container = canvas.parentElement;
-    if (!canvas || !container) return;
+    if (!container) return;
 
     // Handle resize
     const resizeCanvas = () => {

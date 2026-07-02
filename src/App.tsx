@@ -42,7 +42,7 @@ function App() {
     if (info.parameters && info.parameters.length > 0) {
       setParameters(prev => {
         const next = { ...prev };
-        info.parameters.forEach((p: string) => {
+        info.parameters?.forEach((p: string) => {
           if (next[p] === undefined) {
             next[p] = p === 'x0' ? 0.5 : 1.0; // sane defaults
           }
